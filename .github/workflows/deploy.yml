@@ -1,0 +1,40 @@
+name: Deploy Backend to GCE
+
+on:
+  push:
+    branches:
+      - main  # Memicu otomatisasi hanya saat Anda push ke branch main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout kode dari GitHub
+        uses: actions/checkout@v4
+
+      - name: Masuk ke GCE via SSH dan Update Kode
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCE_HOST }}          # IP Publik VM e2-micro Anda
+          username: ${{ secrets.GCE_USERNAME }}  # Username SSH Anda (zadaniammusthofa)
+          key: ${{ secrets.GCE_SSH_KEY }}        # Private SSH Key Anda
+          port: 22
+          script: |
+            # Masuk ke folder proyek di server GCE
+            cd ~/backend-utama
+            
+            # Tarik kode terbaru dari GitHub
+            git pull origin main
+            
+            # Aktifkan virtual environment dan pastikan dependensi terupdate
+            source venv/bin/activate
+            pip install -r requirements.txt --upgrade
+            
+            # Matikan proses backend lama jika sedang berjalan
+            pkill -f failover.py || true
+            
+            # Jalankan kembali backend di background menggunakan nohup
+            nohup python failover.py > backend.log 2>&1 &
+            
+            echo "🚀 Deployment Berhasil dan Backend telah di-restart!"
