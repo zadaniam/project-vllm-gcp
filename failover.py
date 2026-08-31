@@ -8,17 +8,13 @@ from google.genai import errors
 # Import library untuk membaca file .env
 from dotenv import load_dotenv
 
-# Muat variabel dari file .env ke dalam sistem
+# Muat variabel dari file .env ke dalam sistem (Hanya aktif saat di MacBook lokal)
 load_dotenv()
 
 # =====================================================================
-# CONFIG LOGGER (Membaca status DEBUG_MODE dari .env)
+# CONFIG LOGGER (Membaca status DEBUG_MODE dari .env / Cloud Environment)
 # =====================================================================
-# Mengambil nilai DEBUG_MODE, default-nya False jika tidak diatur di .env
 IS_DEBUG = os.environ.get("DEBUG_MODE", "False").lower() in ("true", "1", "yes")
-
-# Jika DEBUG_MODE=True, tampilkan semua log INFO & WARNING.
-# Jika DEBUG_MODE=False, hanya tampilkan log CRITICAL/ERROR saja agar terminal bersih.
 log_level = logging.INFO if IS_DEBUG else logging.ERROR
 
 logging.basicConfig(
@@ -31,13 +27,46 @@ logging.basicConfig(
 )
 
 # =====================================================================
-# CONFIG SERVER
+# STRATEGI FALLBACK: GOOGLE SECRET MANAGER VS LOKAL .ENV
+# =====================================================================
+def get_gemini_api_key():
+    """
+    Otomatis mendeteksi lingkungan. Jika di server GCE, ambil dari Secret Manager.
+    Jika gagal/di MacBook lokal, otomatis fallback membaca file .env Anda.
+    """
+    # 1. Coba jalur industri Google Cloud Secret Manager (Saat dideploy di GCE)
+    try:
+        from google.cloud import secretmanager
+        
+        # Sesuai nama project di Google Cloud Console Anda
+        PROJECT_ID = "my-first-project" 
+        SECRET_ID = "gemini-api-key"
+        
+        client = secretmanager.SecretManagerServiceClient()
+        name = f"projects/{PROJECT_ID}/secrets/{SECRET_ID}/versions/latest"
+        
+        response = client.access_secret_version(request={"name": name})
+        logging.info("🔐 [GCE ENVIRONMENT] API Key Gemini ditarik langsung dari Secret Manager.")
+        return response.payload.data.decode("UTF-8")
+        
+    except Exception as e:
+        # 2. Jika gagal/error (Saat debugging di VS Code MacBook Anda)
+        logging.info("💻 [LOCAL ENVIRONMENT] Mencari kunci API dari berkas .env lokal...")
+        api_key_lokal = os.environ.get("GEMINI_API_KEY")
+        return api_key_lokal
+
+# =====================================================================
+# CONFIG SERVER & CLOUD ENGINE
 # =====================================================================
 VLLM_EXTERNAL_IP = "136.85.107.67"
 VLLM_BASE_URL = f"http://{VLLM_EXTERNAL_IP}:8000/v1" 
 
-vllm_client = OpenAI(base_url=VLLM_BASE_URL, api_key="vllm-placeholder", timeout=30.0)
-gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+# Inisialisasi Klien OpenAI (vLLM)
+vllm_client = OpenAI(base_url=VLLM_BASE_URL, api_key="vllm-placeholder", timeout=5.0)
+
+# Ambil API Key dengan sistem deteksi otomatis ganda
+GEMINI_API_KEY = get_gemini_api_key()
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 class ChatSessionWithFailover:
     def __init__(self):
@@ -79,7 +108,6 @@ class ChatSessionWithFailover:
                 stream=True
             )
             
-            # Label indikator AI hanya muncul jika dalam mode debugging
             if IS_DEBUG:
                 print("🤖 AI (vLLM): ", end="")
             else:
@@ -108,8 +136,9 @@ class ChatSessionWithFailover:
             logging.warning("🚨 Mencoba mengaktifkan failover ke API Google Gemini...")
             gemini_contents = self.get_gemini_contents(user_prompt)
             
+            # Menggunakan gemini-2.5-flash sebagai standar industri produksi terkini
             response_stream = gemini_client.models.generate_content_stream(
-                model="gemini-3.5-flash-lite",
+                model="gemini-2.5-flash",
                 contents=gemini_contents,
                 config={
                     "system_instruction": self.system_instruction,
@@ -141,7 +170,6 @@ class ChatSessionWithFailover:
 if __name__ == "__main__":
     chat = ChatSessionWithFailover()
     
-    # Beri tahu status debug saat aplikasi pertama kali dijalankan
     status_debug = "AKTIF 🟢" if IS_DEBUG else "NONAKTIF 🔴"
     print(f"⚙️  Mode Debugging: {status_debug}")
     print("🤖 Sistem Chat Siap! Ketik 'keluar' untuk berhenti.\n")
