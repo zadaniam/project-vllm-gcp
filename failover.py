@@ -41,7 +41,7 @@ def get_gemini_api_key():
         from google.cloud import secretmanager
         
         # JIKA ID PROYEK ANDA BERBEDA, GANTI DI SINI (Contoh: "my-first-project-xxxxxx")
-        PROJECT_ID = "my-first-project" 
+        PROJECT_ID = "project-0cb13828-a08a-466a-934" 
         SECRET_ID = "gemini-api-key"
         
         client = secretmanager.SecretManagerServiceClient()
