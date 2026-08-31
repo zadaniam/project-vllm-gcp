@@ -31,14 +31,16 @@ logging.basicConfig(
 # =====================================================================
 def get_gemini_api_key():
     """
-    Otomatis mendeteksi lingkungan. Jika di server GCE, ambil dari Secret Manager.
-    Jika gagal/di MacBook lokal, otomatis fallback membaca file .env Anda.
+    Sistem deteksi kunci berlapis:
+    1. Coba dari Google Secret Manager (GCE Production)
+    2. Jika gagal/di Mac, coba dari Environment OS (GCE System Env / GitHub Secrets)
+    3. Jika masih kosong, coba dari berkas .env lokal
     """
-    # 1. Coba jalur industri Google Cloud Secret Manager (Saat dideploy di GCE)
+    # Lapisan 1: Google Cloud Secret Manager
     try:
         from google.cloud import secretmanager
         
-        # Sesuai nama project di Google Cloud Console Anda
+        # JIKA ID PROYEK ANDA BERBEDA, GANTI DI SINI (Contoh: "my-first-project-xxxxxx")
         PROJECT_ID = "my-first-project" 
         SECRET_ID = "gemini-api-key"
         
@@ -46,14 +48,22 @@ def get_gemini_api_key():
         name = f"projects/{PROJECT_ID}/secrets/{SECRET_ID}/versions/latest"
         
         response = client.access_secret_version(request={"name": name})
-        logging.info("🔐 [GCE ENVIRONMENT] API Key Gemini ditarik langsung dari Secret Manager.")
+        logging.info("🔐 [JALUR 1] Sukses menarik API Key dari Google Secret Manager.")
         return response.payload.data.decode("UTF-8")
-        
     except Exception as e:
-        # 2. Jika gagal/error (Saat debugging di VS Code MacBook Anda)
-        logging.info("💻 [LOCAL ENVIRONMENT] Mencari kunci API dari berkas .env lokal...")
-        api_key_lokal = os.environ.get("GEMINI_API_KEY")
-        return api_key_lokal
+        logging.warning(f"Jalur Secret Manager dilewati atau belum diizinkan: {str(e)}")
+
+    # Lapisan 2: Ambil langsung dari Environment OS 
+    # (Ini akan menyelamatkan aplikasi jika dipasang lewat GitHub Secrets / system env)
+    api_key_env = os.environ.get("GEMINI_API_KEY")
+    if api_key_env:
+        logging.info("🚀 [JALUR 2] Sukses membaca API Key dari OS Environment.")
+        return api_key_env
+
+    # Lapisan 3: Berkas .env Lokal (Untuk VS Code Mac)
+    logging.info("💻 [JALUR 3] Membaca kunci API dari berkas .env lokal...")
+    return os.environ.get("GEMINI_API_KEY")
+
 
 # =====================================================================
 # CONFIG SERVER & CLOUD ENGINE
