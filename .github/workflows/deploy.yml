@@ -37,6 +37,17 @@ jobs:
             # SOLUSI: Menginjeksikan API KEY secara langsung saat menjalankan nohup
             export GOOGLE_API_KEY="${{ secrets.GEMINI_API_KEY }}"
             export DEBUG_MODE="True"
-            nohup python failover.py > backend.log 2>&1 &
-            
-            echo "🚀 Deployment Berhasil dan Backend telah di-restart!"
+          
+            # PERBAIKAN: Gunakan flag -u agar log eror langsung ditulis saat itu juga
+            nohup python -u failover.py > backend.log 2>&1 &
+
+            # PERBAIKAN: Beri jeda 3 detik, lalu cek apakah prosesnya masih hidup
+            sleep 3
+            if ps aux | grep -v grep | grep "failover.py" > /dev/null
+            then
+                echo "🚀 Deployment Berhasil dan Backend berjalan dengan aman!"
+            else
+                echo "❌ ERROR: Backend gagal dinyalakan! Isi backend.log:"
+                cat backend.log
+                exit 1
+            fi
