@@ -35,7 +35,7 @@ jobs:
             pkill -f failover.py || true
             
             # SOLUSI: Menginjeksikan API KEY secara langsung saat menjalankan nohup
-            export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+            export GOOGLE_API_KEY="${{ secrets.GEMINI_API_KEY }}"
             export DEBUG_MODE="True"
             nohup python failover.py > backend.log 2>&1 &
             

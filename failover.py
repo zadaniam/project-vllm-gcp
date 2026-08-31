@@ -53,16 +53,13 @@ def get_gemini_api_key():
     except Exception as e:
         logging.warning(f"Jalur Secret Manager dilewati atau belum diizinkan: {str(e)}")
 
-    # Lapisan 2: Ambil langsung dari Environment OS 
-    # (Ini akan menyelamatkan aplikasi jika dipasang lewat GitHub Secrets / system env)
-    api_key_env = os.environ.get("GEMINI_API_KEY")
+    # Lapisan 2: Membaca GOOGLE_API_KEY dari Environment OS (Standar Google SDK)
+    api_key_env = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
     if api_key_env:
-        logging.info("🚀 [JALUR 2] Sukses membaca API Key dari OS Environment.")
         return api_key_env
 
-    # Lapisan 3: Berkas .env Lokal (Untuk VS Code Mac)
-    logging.info("💻 [JALUR 3] Membaca kunci API dari berkas .env lokal...")
-    return os.environ.get("GEMINI_API_KEY")
+    # Lapisan 3: Balik ke pembacaan .env lokal Anda jika di MacBook
+    return os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 
 # =====================================================================
